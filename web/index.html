@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLiDoesSearch</title>
+    <style>
+        html {
+            color-scheme: light;
+        }
+        body {
+            margin: 0;
+            font-family: sans-serif;
+            overflow-y: scroll;
+            transform: rotate(0deg);
+            transform-origin: center 50vh;
+            transition: transform 2500ms ease;
+        }
+        p {
+            margin: 0;
+        }
+        #top-section {
+            height: 6rem;
+            padding-inline: 3rem;
+            padding-block: 1.5rem;
+            box-sizing: border-box;
+            border-bottom: 1px solid #cccccc;
+            transition: 350ms cubic-bezier(0.22, 1, 0.36, 1);
+            display: flex;
+            flex-flow: row nowrap;
+            gap: 1.5rem;
+            align-items: center;
+            justify-content: start;
+        }
+        .initial-styles #top-section {
+            height: 100svh;
+        }
+        #interaction-box {
+            max-width: 75vw;
+            transition: 350ms cubic-bezier(0.25, 1, 0.5, 1);
+            display: flex;
+            flex-flow: row nowrap;
+            gap: 1.5rem;
+            align-items: center;
+            justify-content: start;
+        }
+        .initial-styles #interaction-box {
+            flex-flow: column nowrap;
+            margin-left: 50%;
+            translate: -50% -50%;
+        }
+        #logo {
+            user-select: none;
+            transition: 350ms cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .initial-styles #logo {
+            font-size: x-large;
+        }
+        #search-box {
+            width: 30rem;
+            max-width: 100%;
+            height: 3rem;
+            padding-inline: 1rem;
+            background-color: #ffffff;
+            border-radius: calc(1px * Infinity);
+            box-shadow: 0 0.25rem 0.75rem #aaaaaa66;
+            font-size: large;
+            display: flex;
+            flex-flow: row nowrap;
+            align-items: center;
+            justify-content: space-between;
+        }
+        #search-box-input {
+            flex: 1;
+            height: 2rem;
+            background-color: transparent;
+            border: none;
+            outline: none;
+        }
+        #search-box-button {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background-color: transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #search-box-button svg {
+            width: 24px;
+            height: 24px;
+            stroke: black;
+        }
+        #search-box-button svg:active {
+            stroke: #555555;
+        }
+
+        #middle-section {
+            display: none;
+            padding-inline: 3rem;
+            padding-bottom: 6rem;
+        }
+        #results-info {
+            margin-block: 1rem;
+            color: #666666;
+            font-size: small;
+        }
+        #autocorrect-info {
+            display: none;
+            margin-block: 1rem;
+            color: #000000;
+        }
+        #autocorrect-info a {
+            font-style: italic;
+        }
+
+        .result {
+            margin-top: 2rem;
+            display: flex;
+            flex-flow: column nowrap;
+            gap: 0.5rem;
+        }
+        .domain {
+            color: #666666;
+            font-size: small;
+        }
+        .link {
+            font-size: larger;
+        }
+        .description {
+            font-size: small;
+        }
+        .metadata {
+            color: #666666;
+            font-size: small;
+        }
+
+        .intro-animation {
+            opacity: 0;
+            translate: 0 15px;
+            animation-duration: 400ms;
+            animation-name: intro;
+            animation-fill-mode: forwards;
+            animation-timing-function: ease;
+        }
+        @keyframes intro {
+            0% {
+                opacity: 0;
+                translate: 0 15px;
+            }
+            100% {
+                opacity: 1;
+                translate: 0 0;
+            }
+        }
+
+        @media (min-width: 64rem) {
+            #top-section {
+                padding-inline: 5rem;
+            }
+            #middle-section {
+                padding-inline: 5rem;
+            }
+        }
+    </style>
+</head>
+<body class="initial-styles">
+    <div id="top-section">
+        <div id="interaction-box">
+            <span id="logo">HLiDoes<b>Search</b></span>
+            <div id="search-box">
+                <input id="search-box-input" type="text" autofocus />
+                <button onclick="search()" id="search-box-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="middle-section">
+        <p id="results-info"></p>
+        <p id="autocorrect-info">Did you mean: <a href="javascript:;">recursion</a>?</p>
+        <div id="results-container"></div>
+    </div>
+
+    <template id="result-template">
+        <div class="result intro-animation">
+            <p class="domain"></p>
+            <a class="link" href="#"></a>
+            <p class="description"></p>
+            <p class="metadata"></p>
+        </div>
+    </template>
+
+    <script>
+        const topSection = document.getElementById("top-section");
+        const searchBoxInput = document.getElementById("search-box-input");
+        const middleSection = document.getElementById("middle-section");
+        const resultsInfo = document.getElementById("results-info");
+        const autocorrectInfo = document.getElementById("autocorrect-info");
+        const resultsContainer = document.getElementById("results-container");
+        const resultTemplate = document.getElementById("result-template");
+
+        // https://stackoverflow.com/a/7382028
+        function htmlEscape(text) {
+            return String(text)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+        }
+
+        searchBoxInput.addEventListener("keydown", async event => {
+            if (event.key === "Enter") {
+                await search();
+            }
+        });
+
+        window.addEventListener("keydown", event => {
+            if (event.key === "/" && (document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA")) {
+                event.preventDefault();
+                searchBoxInput.focus();
+            }
+        });
+
+        /** Search data from API */
+        let proceedToHideMiddleSection = true;
+        async function search() {
+            const query = searchBoxInput.value.trim();
+            searchBoxInput.value = query;
+            const lowerCaseQuery = query.toLowerCase();
+            const startTime = performance.now();
+
+            // Page styling
+            if (query) {
+                resultsInfo.innerHTML = "";
+                autocorrectInfo.style.display = "none";
+                resultsContainer.innerHTML = "";
+                proceedToHideMiddleSection = false;
+                middleSection.style.display = "block";
+                searchBoxInput.blur();
+                document.body.classList.remove("initial-styles");
+                document.title = `${query} - HLiDoesSearch`;
+            } else {
+                document.body.classList.add("initial-styles");
+                // preserve the links sliding-down effect and prevent visual lag of hiding a very long element
+                proceedToHideMiddleSection = true;
+                setTimeout(() => {
+                    if (proceedToHideMiddleSection) {
+                        middleSection.style.display = "none";
+                    }
+                }, 350);
+                document.title = "HLiDoesSearch";
+                return;
+            }
+
+            // Fetching
+            let searchData;
+            try {
+                const searchResponse = await fetch("api/search?" + new URLSearchParams({
+                    key: "hlidoessearchsecretkey",
+                    s: query,
+                    count: 1000
+                }).toString());
+                searchData = await searchResponse.json();
+            } catch (error) {
+                resultsInfo.innerHTML = "Could not complete the search due to error";
+                return;
+            }
+
+            // Displaying
+            resultsInfo.innerHTML = searchData.count === 1 ? `Got ${searchData.count} result in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds` : `Got ${searchData.count} results in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds`;
+            let resultNum = 0;
+            let resultDelay = 0;
+            for (const searchResult of searchData.results) {
+                const resultFragment = resultTemplate.content.cloneNode(true);
+                resultFragment.querySelector(".domain").innerHTML = new URL(searchResult.link).hostname;
+                resultFragment.querySelector(".link").innerHTML = searchResult.title;
+                resultFragment.querySelector(".link").href = searchResult.link;
+                resultFragment.querySelector(".description").innerHTML = htmlEscape(searchResult.description);
+                resultFragment.querySelector(".metadata").innerHTML = `Relevance: ${searchResult.score} / Fetch Date: ${new Date(searchResult.date).toDateString()}`;
+                resultFragment.children[0].style.animationDelay = `${resultDelay}ms`;
+                resultDelay += Math.max(0, 40 - resultNum++);
+                resultsContainer.appendChild(resultFragment);
+            }
+
+            // Easter eggs
+            switch (lowerCaseQuery) {
+                case "recursion":
+                    didYouMean("recursion");
+                    break;
+                case "anagram":
+                    didYouMean("nag a ram");
+                    break;
+                case "define anagram":
+                    didYouMean("nerd frame again");
+                    break;
+                case "google":
+                    didYouMean("HLiDoesSearch");
+                    break;
+                case "hlidoessearch":
+                    didYouMean("here", "");
+                    break;
+            }
+
+            if (lowerCaseQuery.includes("do a barrel roll")) {
+                document.body.style.transition = "transform 0ms ease";
+                document.body.style.transform = "rotate(0deg)";
+                setTimeout(() => {
+                    document.body.style.transition = "transform 2500ms ease";
+                    document.body.style.transform = "rotate(360deg)";
+                }, 10);
+                resultsInfo.innerHTML = "Okay";
+            } else if (lowerCaseQuery === "askew") {
+                document.body.style.transition = "transform 500ms ease";
+                document.body.style.transform = "rotate(2deg)";
+            }
+        }
+
+        /** Display the autocorrect element */
+        function didYouMean(displayText, searchText = displayText) {
+            const linkElement = autocorrectInfo.querySelector("a");
+            linkElement.innerHTML = displayText;
+            linkElement.onclick = () => {
+                searchBoxInput.value = searchText;
+                search();
+                return false;
+            };
+            autocorrectInfo.style.display = "block";
+        }
+    </script>
+</body>
+</html>
