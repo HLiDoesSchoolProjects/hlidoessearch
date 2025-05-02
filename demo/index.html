@@ -463,7 +463,6 @@
             }
 
             // Sort results (static demo version)
-            let searchResults;
             const queryWords = lowerCaseQuery.split(" ").map(word => stemmer(word));
             const infoData = demoData.map(item => {
                 let score = 0;
@@ -479,9 +478,9 @@
                     score: score
                 };
             });
-            searchResults = infoData.filter(item => item.score > 0).toSorted((a, b) => b.score - a.score).slice(0, 1000);
+            const searchResults = infoData.filter(item => item.score > 0).toSorted((a, b) => b.score - a.score).slice(0, 1000);
 
-            // Displaying (static demo version)
+            // Displaying
             resultsInfo.innerHTML = searchResults.length === 1 ? `Got ${searchResults.length} result in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds` : `Got ${searchResults.length} results in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds`;
             let resultNum = 0;
             let resultDelay = 0;

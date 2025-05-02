@@ -258,24 +258,23 @@
             }
 
             // Fetching
-            let searchData;
+            let searchResults;
             try {
                 const searchResponse = await fetch("api/search?" + new URLSearchParams({
-                    key: "hlidoessearchsecretkey",
-                    s: query,
+                    q: query,
                     count: 1000
                 }).toString());
-                searchData = await searchResponse.json();
+                searchResults = await searchResponse.json();
             } catch (error) {
                 resultsInfo.innerHTML = "Could not complete the search due to error";
                 return;
             }
 
             // Displaying
-            resultsInfo.innerHTML = searchData.count === 1 ? `Got ${searchData.count} result in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds` : `Got ${searchData.count} results in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds`;
+            resultsInfo.innerHTML = searchResults.length === 1 ? `Got ${searchResults.length} result in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds` : `Got ${searchResults.length} results in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds`;
             let resultNum = 0;
             let resultDelay = 0;
-            for (const searchResult of searchData.results) {
+            for (const searchResult of searchResults) {
                 const resultFragment = resultTemplate.content.cloneNode(true);
                 resultFragment.querySelector(".domain").innerHTML = new URL(searchResult.link).hostname;
                 resultFragment.querySelector(".link").innerHTML = searchResult.title;
