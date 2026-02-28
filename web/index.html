@@ -271,7 +271,7 @@
             }
 
             // Displaying
-            resultsInfo.innerHTML = searchResults.length === 1 ? `Got ${searchResults.length} result in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds` : `Got ${searchResults.length} results in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds`;
+            resultsInfo.innerHTML = `Got ${searchResults.length} ${searchResults.length === 1 ? "result" : "results"} in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds`;
             let resultNum = 0;
             let resultDelay = 0;
             for (const searchResult of searchResults) {
