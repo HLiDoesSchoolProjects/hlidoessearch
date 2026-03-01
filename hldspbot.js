@@ -140,7 +140,7 @@ async function crawlOnce() {
     if (robotsMeta?.content.includes("nofollow")) {
         console.log(`Skipped Link Collection: ${link} (meta nofollow)`);
         errorsCount.nofollow++;
-    } else if (links.length > toCrawlIndex + 10000) {
+    } else if (links.length > toCrawlIndex + 100000) {
         console.log(`Skipped Link Collection: too many in buffer`);
         errorsCount.linksBufferFull++;
     } else {
@@ -155,7 +155,7 @@ async function crawlOnce() {
                 errorsCount.parseUrl++;
                 continue;
             }
-            if (linkElement.rel.includes("nofollow")) {
+            if (linkElement.rel?.includes("nofollow")) {
                 console.log(`Excluded Link: ${newLink} (nofollow)`);
                 errorsCount.nofollowLinks++;
                 continue;
