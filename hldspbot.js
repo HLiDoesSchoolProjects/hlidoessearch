@@ -3,8 +3,27 @@ import fs from "node:fs";
 import { JSDOM, VirtualConsole } from "jsdom";
 import robotsParser from "robots-txt-parser";
 import { scoreNode, stemmer, writeToFileSync } from "./helpers.js";
+import { addDocumentToBm25Stats, buildBm25Stats, createBm25Stats, getDocLength } from "./bm25.js";
 
-const USER_AGENT = "Mozilla/5.0 (compatible; hldspbot/1.0; +https://hlidoesschoolprojects.github.io)";
+const USER_AGENT = "Mozilla/5.0 (compatible; hldspbot/2.0; +https://hlidoesschoolprojects.github.io)";
+const CLASSIC_DATA_PATH = "data/data.json";
+const BM25_STATS_DATA_PATH = "data/bm25_stats.json";
+const CRAWL_STATE_DATA_PATH = "data/crawl_state.json";
+
+const errorsCount = {
+    parseRobots: 0,
+    robots: 0,
+    fetch: 0,
+    http: 0,
+    parseDocument: 0,
+    noindex: 0,
+    noDescription: 0,
+    nofollow: 0,
+    linksBufferFull: 0,
+    parseUrl: 0,
+    nofollowLinks: 0,
+    tooManyLinksFromPage: 0
+};
 
 const robots = robotsParser({
     userAgent: USER_AGENT,
@@ -20,32 +39,58 @@ virtualConsole.on("dir", () => {});
 let crawledPages = [];
 let links = [];
 let toCrawlIndex = 0;
+let bm25Stats = createBm25Stats();
+
+function saveProgress() {
+    writeToFileSync(CLASSIC_DATA_PATH, JSON.stringify(crawledPages));
+    writeToFileSync(BM25_STATS_DATA_PATH, JSON.stringify(bm25Stats));
+    writeToFileSync(CRAWL_STATE_DATA_PATH, JSON.stringify({
+        links,
+        toCrawlIndex,
+        errorsCount,
+        updatedAt: new Date().toISOString()
+    }));
+}
 
 /** Crawl the next page in links list, store its data, and collect links from it (respecting robots rules) */
 async function crawlOnce() {
-    // Fetch page with robots.txt permission
+    console.log(`---------- (crawled: ${crawledPages.length}, links: ${links.length}) ----------`);
     const link = links[toCrawlIndex];
-    console.log(`Fetching: ${link} (crawled: ${crawledPages.length}, links: ${links.length})`);
     toCrawlIndex++;
-    let response;
+
+    // Check robots.txt permission
+    let canCrawl = true;
     try {
         await robots.useRobotsFor(new URL(link).origin);
-        if (!robots.canCrawlSync(link)) {
-            console.log(`Disallowed: ${link} (robots.txt)`);
-            return;
-        }
+        canCrawl = robots.canCrawlSync(link);
+    } catch (error) {
+        console.error(`Robots Parse Error: ${error} (allowing crawl for ${link})`);
+        errorsCount.parseRobots++;
+    }
+    if (!canCrawl) {
+        console.log(`Disallowed: ${link} (robots.txt)`);
+        errorsCount.robots++;
+        return;
+    }
+
+    // Fetch page
+    let response;
+    try {
         response = await fetch(link, {
             headers: {
                 "User-Agent": USER_AGENT
             },
             signal: AbortSignal.timeout(5000)
         });
+        console.log(`Fetched: ${link}`);
     } catch (error) {
-        console.error(`Page Fetching Error: ${error}`);
+        console.error(`Page Fetch Error: ${error}`);
+        errorsCount.fetch++;
         return;
     }
     if (!(response.status >= 200 && response.status < 300)) {
         console.log(`Error: ${response.status}`);
+        errorsCount.http++;
         return;
     }
 
@@ -55,12 +100,14 @@ async function crawlOnce() {
         const responseText = await response.text();
         document = (new JSDOM(responseText, { url: link, virtualConsole })).window.document;
     } catch (error) {
-        console.error(`Document Parsing Error: ${error}`);
+        console.error(`Document Parse Error: ${error}`);
+        errorsCount.parseDocument++;
         return;
     }
     const robotsMeta = document.querySelector("meta[name='robots']");
     if (robotsMeta?.content.includes("noindex")) {
         console.log(`Skipped Indexing: ${link} (meta noindex)`);
+        errorsCount.noindex++;
     } else {
         const descriptionMeta = document.querySelector("meta[name='description']");
         const descriptionWords = descriptionMeta ? descriptionMeta.content.toLowerCase().split(" ") : [];
@@ -71,6 +118,7 @@ async function crawlOnce() {
         if (!description) {
             const firstP = document.querySelector("p");
             description = firstP ? firstP.innerHTML : "";
+            errorsCount.noDescription++;
         }
 
         const wordScoreMap = scoreNode(document, []);
@@ -82,27 +130,34 @@ async function crawlOnce() {
                 wordScoreMap[stemmedWord] = 20;
             }
         }
-        crawledPages.push({ link, title: document.title, description: description, date: new Date().toISOString(), data: wordScoreMap });
+        const docLength = getDocLength(wordScoreMap);
+        const crawledPage = { link, title: document.title, description: description, date: new Date().toISOString(), docLength, data: wordScoreMap };
+        crawledPages.push(crawledPage);
+        addDocumentToBm25Stats(bm25Stats, wordScoreMap, docLength);
     }
 
     // Collect links for next crawls
     if (robotsMeta?.content.includes("nofollow")) {
         console.log(`Skipped Link Collection: ${link} (meta nofollow)`);
+        errorsCount.nofollow++;
     } else if (links.length > toCrawlIndex + 10000) {
         console.log(`Skipped Link Collection: too many in buffer`);
+        errorsCount.linksBufferFull++;
     } else {
         const linkElements = document.getElementsByTagName("a");
-        let linksCollected = 0
+        let linksCollected = 0;
         for (const linkElement of linkElements) {
             let newLink;
             try {
                 newLink = new URL(linkElement.href, link).href;
             } catch (error) {
-                console.log(`URL Parsing Error: ${linkElement.href} (${error})`);
+                console.log(`URL Parse Error: ${linkElement.href} (${error})`);
+                errorsCount.parseUrl++;
                 continue;
             }
             if (linkElement.rel.includes("nofollow")) {
                 console.log(`Excluded Link: ${newLink} (nofollow)`);
+                errorsCount.nofollowLinks++;
                 continue;
             }
             const hashIndex = newLink.indexOf("#");
@@ -115,7 +170,8 @@ async function crawlOnce() {
                 links.push(newLink);
                 linksCollected++;
                 if (linksCollected > 50) {
-                    console.log(`Stopped Link Collection: too many from one page`);
+                    console.log(`Stopped Link Collection: too many (${linkElements.length}) from one page`);
+                    errorsCount.tooManyLinksFromPage++;
                     break;
                 }
             } else {
@@ -129,16 +185,43 @@ async function crawlOnce() {
 async function startCrawl(userLinks, count) {
     // Try to pick up last crawl progress
     const startTime = performance.now();
+    let resumedFromState = false;
     try {
-        const dataFile = fs.readFileSync("data/data.json", "utf-8");
+        const dataFile = fs.readFileSync(CLASSIC_DATA_PATH, "utf-8");
         crawledPages = JSON.parse(dataFile);
+        for (const crawledPage of crawledPages) {
+            if (!Number.isFinite(crawledPage.docLength)) {
+                crawledPage.docLength = getDocLength(crawledPage.data ?? {});
+            }
+        }
         for (const crawledPage of crawledPages) {
             links.push(crawledPage.link);
         }
-        toCrawlIndex = links.length;
-        console.log(`Parsed ${crawledPages.length} crawled pages, resuming progress...`);
-    } catch (error) {
-        console.warn(`File Read Error: crawling to new data file... (${error})`);
+        bm25Stats = buildBm25Stats(crawledPages);
+
+        try {
+            const stateFile = fs.readFileSync(CRAWL_STATE_DATA_PATH, "utf-8");
+            const stateData = JSON.parse(stateFile);
+            if (Array.isArray(stateData.links) && Number.isInteger(stateData.toCrawlIndex) && stateData.toCrawlIndex >= 0 && stateData.toCrawlIndex <= stateData.links.length) {
+                links = stateData.links;
+                toCrawlIndex = stateData.toCrawlIndex;
+                for (const key of Object.keys(errorsCount)) {
+                    if (Number.isFinite(stateData.errorsCount?.[key])) {
+                        errorsCount[key] = stateData.errorsCount[key];
+                    }
+                }
+                resumedFromState = true;
+            }
+        } catch {
+            // Just fall back
+        }
+
+        if (!resumedFromState) {
+            toCrawlIndex = links.length;
+        }
+        console.log(`Resumed progress from ${resumedFromState ? "full crawl state" : "data file only since no valid state file found (!)"}, parsed ${crawledPages.length} crawled pages`);
+    } catch {
+        console.warn(`Crawling to new data file...`);
     }
     const startLength = crawledPages.length;
 
@@ -151,12 +234,35 @@ async function startCrawl(userLinks, count) {
     while (crawledPages.length < startLength + count && links.length >= toCrawlIndex + 1) {
         await Promise.all([crawlOnce(), new Promise(resolve => setTimeout(resolve, 500))]);
         if (crawledPages.length % 25 === 0) {
-            writeToFileSync("data/data.json", JSON.stringify(crawledPages));
+            saveProgress();
             console.log(`Autosaved ${crawledPages.length - startLength} new crawled pages!`);
         }
     }
-    writeToFileSync("data/data.json", JSON.stringify(crawledPages));
+    saveProgress();
+
+    // Final log
+    console.log("------------------------------------------------------------------------------------------");
     console.log(`${crawledPages.length - startLength} crawled in ${((performance.now() - startTime) / 1000).toFixed(2)} s`);
+    const errorLabels = {
+        parseRobots: "robots.txt parse errors",
+        robots: "disallowed by robots",
+        fetch: "fetch errors",
+        http: "non-2xx http responses",
+        parseDocument: "document parse errors",
+        noindex: "noindex meta tag pages",
+        noDescription: "pages without description",
+        nofollow: "nofollow meta tag pages",
+        linksBufferFull: "skipped link collection due to buffer full",
+        parseUrl: "URL parse errors",
+        nofollowLinks: "skipped nofollow links",
+        tooManyLinksFromPage: "pages stopped link collection due to too many from one page"
+    };
+    let parts = [];
+    for (const [key, label] of Object.entries(errorLabels)) {
+        const count = errorsCount[key];
+        if (count && count !== 0) parts.push(`${count} ${label}`);
+    }
+    console.log(`Walked through ${parts.length === 0 ? "0 errors!" : parts.join(", ")}`);
 }
 
 

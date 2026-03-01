@@ -47,7 +47,7 @@
         .initial-styles #interaction-box {
             flex-flow: column nowrap;
             margin-left: 50%;
-            translate: -50% -50%;
+            translate: -50% -35%;
         }
         #logo {
             user-select: none;
@@ -94,6 +94,57 @@
         }
         #search-box-button svg:active {
             stroke: #555555;
+        }
+        
+        #mode-switcher {
+            margin-left: 0.3rem;
+            color: #666666;
+            font-size: small;
+            display: flex;
+            flex-flow: row nowrap;
+            align-items: center;
+            gap: 0.45rem;
+        }
+        #mode-toggle {
+            --toggle-width: 2.15rem;
+            --toggle-height: 1.2rem;
+            --toggle-padding: 0.12rem;
+            --toggle-checked-left: 1.05rem;
+            --toggle-knob-size: 0.85rem;
+            position: relative;
+            width: var(--toggle-width);
+            height: var(--toggle-height);
+            border-radius: 999px;
+            border: 1px solid #cccccc;
+            background-color: #dddddd;
+            transition: background-color 150ms ease;
+            appearance: none;
+            -webkit-appearance: none;
+            outline: none;
+            cursor: pointer;
+        }
+        #mode-toggle::before {
+            content: "";
+            position: absolute;
+            width: var(--toggle-knob-size);
+            height: var(--toggle-knob-size);
+            top: 50%;
+            left: var(--toggle-padding);
+            border-radius: 50%;
+            background-color: #ffffff;
+            box-shadow: 0 1px 2px #00000033;
+            transform: translateY(-50%);
+            transition: left 150ms ease;
+        }
+        #mode-toggle:checked {
+            background-color: #7fa46f;
+            border-color: #6f9460;
+        }
+        #mode-toggle:checked::before {
+            left: var(--toggle-checked-left);
+        }
+        #mode-text {
+            min-width: 3.75rem;
         }
 
         #middle-section {
@@ -177,6 +228,10 @@
                     </svg>
                 </button>
             </div>
+            <div id="mode-switcher">
+                <input id="mode-toggle" type="checkbox" aria-label="Toggle Advanced engine" />
+                <span id="mode-text">Classic</span>
+            </div>
         </div>
     </div>
     <div id="middle-section">
@@ -197,6 +252,8 @@
     <script>
         const topSection = document.getElementById("top-section");
         const searchBoxInput = document.getElementById("search-box-input");
+        const modeToggle = document.getElementById("mode-toggle");
+        const modeText = document.getElementById("mode-text");
         const middleSection = document.getElementById("middle-section");
         const resultsInfo = document.getElementById("results-info");
         const autocorrectInfo = document.getElementById("autocorrect-info");
@@ -224,6 +281,24 @@
                 event.preventDefault();
                 searchBoxInput.focus();
             }
+        });
+
+        /* Mode switcher */
+        function getCurrentMode() {
+            return modeToggle.checked ? "bm25" : "classic";
+        }
+        function updateModeText() {
+            modeText.textContent = modeToggle.checked ? "Advanced" : "Classic";
+        }
+
+        const MODE_STORAGE_KEY = "hlidoessearch_mode";
+        const storedMode = localStorage.getItem(MODE_STORAGE_KEY);
+        modeToggle.checked = storedMode === "bm25";
+        updateModeText();
+        modeToggle.addEventListener("change", () => {
+            updateModeText();
+            localStorage.setItem(MODE_STORAGE_KEY, getCurrentMode());
+            search();
         });
 
         /** Search data from API */
@@ -262,7 +337,8 @@
             try {
                 const searchResponse = await fetch("api/search?" + new URLSearchParams({
                     q: query,
-                    count: 1000
+                    count: 1000,
+                    mode: getCurrentMode()
                 }).toString());
                 searchResults = await searchResponse.json();
             } catch (error) {

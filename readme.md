@@ -10,7 +10,9 @@ Run `npm install` first to install the dependencies for both of the components.
 
 ## The Crawler: hldspbot
 
-The **HL**i**D**oes**S**chool**P**rojects™ **Bot** crawls the internet™ to gather pages and scores them for each searchable word they have, generating a data file at `data/data.json`.
+The **HL**i**D**oes**S**chool**P**rojects™ **Bot** crawls the internet™ to gather pages and scores them for each searchable word they have, generating:
+- classic weighted data at `data/data.json`
+- BM25 corpus stats at `data/bm25_stats.json`
 
 A default data file of around 660 of some of the most popular sites is provided. If you want to use hldspbot to fetch data for yourself, run:
 
