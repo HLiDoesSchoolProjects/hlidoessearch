@@ -2,14 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>HLiDoesSearch</title>
     <style>
-        html {
-            color-scheme: light;
+        :root {
+            color-scheme: light dark;
         }
         body {
             margin: 0;
+            color: light-dark(#060606, #f0f0f0);
+            background-color: light-dark(#fafafa, #202020);
             font-family: sans-serif;
             overflow-y: scroll;
             transform: rotate(0deg);
@@ -24,7 +26,7 @@
             padding-inline: 3rem;
             padding-block: 1.5rem;
             box-sizing: border-box;
-            border-bottom: 1px solid #cccccc;
+            border-bottom: 1px solid light-dark(#dddddd, #343434);
             transition: 350ms cubic-bezier(0.22, 1, 0.36, 1);
             display: flex;
             flex-flow: row nowrap;
@@ -51,6 +53,7 @@
         }
         #logo {
             user-select: none;
+            cursor: pointer;
             transition: 350ms cubic-bezier(0.25, 1, 0.5, 1);
         }
         .initial-styles #logo {
@@ -61,9 +64,9 @@
             max-width: 100%;
             height: 3rem;
             padding-inline: 1rem;
-            background-color: #ffffff;
+            background-color: light-dark(#ffffff, #444444);
             border-radius: calc(1px * Infinity);
-            box-shadow: 0 0.25rem 0.75rem #aaaaaa66;
+            box-shadow: 0 0.25rem 0.75rem light-dark(#aaaaaa66, #11111166);
             font-size: large;
             display: flex;
             flex-flow: row nowrap;
@@ -73,6 +76,7 @@
         #search-box-input {
             flex: 1;
             height: 2rem;
+            color: light-dark(#060606, #f0f0f0);
             background-color: transparent;
             border: none;
             outline: none;
@@ -90,15 +94,15 @@
         #search-box-button svg {
             width: 24px;
             height: 24px;
-            stroke: black;
+            stroke: light-dark(#060606, #dddddd);
         }
         #search-box-button svg:active {
-            stroke: #555555;
+            stroke: light-dark(#555555, #aaaaaa);
         }
-        
+
         #mode-switcher {
             margin-left: 0.3rem;
-            color: #666666;
+            color: light-dark(#666666, #a0a0a0);
             font-size: small;
             display: flex;
             flex-flow: row nowrap;
@@ -115,8 +119,8 @@
             width: var(--toggle-width);
             height: var(--toggle-height);
             border-radius: 999px;
-            border: 1px solid #cccccc;
-            background-color: #dddddd;
+            border: 1px solid light-dark(#cccccc, #333333);
+            background-color: light-dark(#dddddd, #444444);
             transition: background-color 150ms ease;
             appearance: none;
             -webkit-appearance: none;
@@ -131,14 +135,14 @@
             top: 50%;
             left: var(--toggle-padding);
             border-radius: 50%;
-            background-color: #ffffff;
-            box-shadow: 0 1px 2px #00000033;
+            background-color: light-dark(#fafafa, #dddddd);
+            box-shadow: 0 1px 2px light-dark(#00000033, #00000033);
             transform: translateY(-50%);
             transition: left 150ms ease;
         }
         #mode-toggle:checked {
-            background-color: #7fa46f;
-            border-color: #6f9460;
+            background-color: light-dark(#7fa46f, #5a7a50);
+            border-color: light-dark(#6f9460, #3a4e33);
         }
         #mode-toggle:checked::before {
             left: var(--toggle-checked-left);
@@ -154,26 +158,48 @@
         }
         #results-info {
             margin-block: 1rem;
-            color: #666666;
+            color: light-dark(#666666, #a0a0a0);
             font-size: small;
         }
         #autocorrect-info {
             display: none;
             margin-block: 1rem;
-            color: #000000;
         }
         #autocorrect-info a {
             font-style: italic;
+        }
+        #results-container {
+            max-width: 42rem;
         }
 
         .result {
             margin-top: 2rem;
             display: flex;
             flex-flow: column nowrap;
+            align-items: start;
             gap: 0.5rem;
         }
+        .result.clustered {
+            margin-top: 1.5rem;
+            padding-left: 1.5rem;
+            border-left: 3px solid light-dark(#eeeeee, #444444);
+        }
+        .result b {
+            font-weight: 500;
+        }
+        .domain-group {
+            color: light-dark(#666666, #a0a0a0);
+            display: flex;
+            flex-flow: row nowrap;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .favicon {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
         .domain {
-            color: #666666;
             font-size: small;
         }
         .link {
@@ -183,7 +209,7 @@
             font-size: small;
         }
         .metadata {
-            color: #666666;
+            color: light-dark(#666666, #a0a0a0);
             font-size: small;
         }
 
@@ -214,12 +240,17 @@
                 padding-inline: 5rem;
             }
         }
+        @media (min-width: 80rem) {
+            #middle-section {
+                padding-left: 14rem;
+            }
+        }
     </style>
 </head>
 <body class="initial-styles">
     <div id="top-section">
         <div id="interaction-box">
-            <span id="logo">HLiDoes<b>Search</b></span>
+            <span id="logo" onclick="logoClick()">HLiDoes<b>Search</b></span>
             <div id="search-box">
                 <input id="search-box-input" type="text" autofocus />
                 <button onclick="search()" id="search-box-button">
@@ -242,7 +273,10 @@
 
     <template id="result-template">
         <div class="result intro-animation">
-            <p class="domain"></p>
+            <div class="domain-group">
+                <img class="favicon" src="" alt="" onerror="this.outerHTML='<svg class=\'favicon\' xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><line x1=\'2\' y1=\'12\' x2=\'22\' y2=\'12\'></line><path d=\'M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\'></path></svg>';" />
+                <p class="domain"></p>
+            </div>
             <a class="link" href="#"></a>
             <p class="description"></p>
             <p class="metadata"></p>
@@ -270,6 +304,35 @@
                 .replaceAll("'", "&#39;");
         }
 
+        // ai-assisted
+        function highlightMatch(text, tokens) {
+            if (!tokens || tokens.length === 0 || !text) return htmlEscape(text);
+            const pattern = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join("|");
+            const regex = new RegExp(`(${pattern})`, "gi");
+
+            const parts = String(text).split(regex);
+            let result = "";
+            for (let i = 0; i < parts.length; i++) {
+                if (i % 2 === 1) {
+                    result += `<b>${htmlEscape(parts[i])}</b>`;
+                } else {
+                    result += htmlEscape(parts[i]);
+                }
+            }
+            return result;
+        }
+
+        /* Logo */
+        let logoClickedCount = 0;
+        function logoClick() {
+            searchBoxInput.value = "";
+            search();
+            if (++logoClickedCount === 10) {
+                document.querySelector("#logo b").innerHTML = "NotClickOnRandomLogos";
+            }
+        }
+
+        /* Search box */
         searchBoxInput.addEventListener("keydown", async event => {
             if (event.key === "Enter") {
                 await search();
@@ -334,7 +397,7 @@
             // Fetching
             let responseData;
             try {
-                const searchResponse = await fetch("api/search?" + new URLSearchParams({
+                const searchResponse = await fetch("/api/search?" + new URLSearchParams({
                     q: query,
                     count: 50,
                     mode: getCurrentMode()
@@ -350,16 +413,32 @@
             const isRelevanceDecimalNumber = getCurrentMode() === "bm25";
             let resultNum = 0;
             let resultDelay = 0;
+            let lastDomain = "";
+            const highlightTokens = [...lowerCaseQuery.matchAll(/"([^"]+)"/g)].map(m => m[1])
+                .concat(lowerCaseQuery.replace(/"/g, '').split(/\s+/))
+                .filter(w => w.length > 0)
+                .toSorted((a, b) => b.length - a.length);
             for (const searchResult of responseData.results) {
+                const url = new URL(searchResult.link);
+                const hostname = url.hostname.startsWith("www.") ? url.hostname.slice(4) : url.hostname;
+
                 const resultFragment = resultTemplate.content.cloneNode(true);
-                resultFragment.querySelector(".domain").innerHTML = new URL(searchResult.link).hostname;
-                resultFragment.querySelector(".link").innerHTML = searchResult.title;
+                if (hostname === lastDomain) {
+                    resultFragment.children[0].classList.add("clustered");
+                    resultFragment.querySelector(".domain-group").style.display = "none";
+                } else {
+                    resultFragment.querySelector(".favicon").src = `/api/favicon?domain=${encodeURIComponent(url.hostname)}`;
+                    resultFragment.querySelector(".domain").innerHTML = hostname;
+                }
+                resultFragment.querySelector(".link").innerHTML = highlightMatch(searchResult.title, highlightTokens);
                 resultFragment.querySelector(".link").href = searchResult.link;
-                resultFragment.querySelector(".description").innerHTML = htmlEscape(searchResult.description);
+                resultFragment.querySelector(".description").innerHTML = highlightMatch(searchResult.description, highlightTokens);
                 resultFragment.querySelector(".metadata").innerHTML = `Relevance: ${isRelevanceDecimalNumber ? searchResult.score.toFixed(4) : searchResult.score} | Fetch Date: ${new Date(searchResult.date).toDateString()}`;
                 resultFragment.children[0].style.animationDelay = `${resultDelay}ms`;
                 resultDelay += Math.max(0, 40 - resultNum++);
                 resultsContainer.appendChild(resultFragment);
+
+                lastDomain = hostname;
             }
 
             // Easter eggs

@@ -2,7 +2,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 import fs from "node:fs";
 import { JSDOM, VirtualConsole } from "jsdom";
 import robotsParser from "robots-txt-parser";
-import { scoreNode, stemmer, writeToFileSync } from "./helpers.js";
+import { scoreNode, stemmer, writeToFileSync, tokenize } from "./helpers.js";
 import { addDocumentToBm25Stats, buildBm25Stats, createBm25Stats, getDocLength } from "./bm25.js";
 
 const USER_AGENT = "Mozilla/5.0 (compatible; hldspbot/2.0; +https://hlidoesschoolprojects.github.io)";
@@ -18,6 +18,7 @@ const errorsCount = {
     contentType: 0,
     parseDocument: 0,
     noindex: 0,
+    noTitle: 0,
     noDescription: 0,
     nofollow: 0,
     linksBufferFull: 0,
@@ -119,14 +120,18 @@ async function crawlOnce() {
         errorsCount.noindex++;
     } else {
         const descriptionMeta = document.querySelector("meta[name='description']");
-        const descriptionWords = descriptionMeta ? descriptionMeta.content.toLowerCase().split(" ") : [];
+        const descriptionWords = tokenize(descriptionMeta?.content.toLowerCase() ?? "");
         const keywordsMeta = document.querySelector("meta[name='keywords']");
-        const keywordWords = keywordsMeta ? keywordsMeta.content.toLowerCase().split(",") : [];
-        
-        let description = descriptionMeta ? descriptionMeta.content.slice(0, 1000) : "";
+        const keywordWords = tokenize(keywordsMeta?.content.toLowerCase() ?? "");
+
+        let title = document.title ?? "";
+        if (!title) {
+            title = link || "No title.";
+            errorsCount.noTitle++;
+        }
+        let description = descriptionMeta?.content ?? "";
         if (!description) {
-            const firstP = document.querySelector("p");
-            description = firstP ? firstP.innerText?.slice(0, 1000) : "";
+            description = document.querySelector("p")?.innerText || keywordsMeta?.content || document.title || new URL(link).hostname || "No description.";
             errorsCount.noDescription++;
         }
 
@@ -140,7 +145,8 @@ async function crawlOnce() {
             }
         }
         const docLength = getDocLength(wordScoreMap);
-        const crawledPage = { link, title: document.title, description: description, date: new Date().toISOString(), docLength, data: wordScoreMap };
+
+        const crawledPage = { link, title: title.slice(0, 100), description: description.slice(0, 1000), date: new Date().toISOString(), docLength: docLength, data: wordScoreMap };
         crawledPages.push(crawledPage);
         addDocumentToBm25Stats(bm25Stats, wordScoreMap, docLength);
     }
@@ -262,6 +268,7 @@ async function startCrawl(userLinks, count) {
         contentType: "non-HTML documents",
         parseDocument: "document parse errors",
         noindex: "noindex meta tag pages",
+        noTitle: "pages without title",
         noDescription: "pages without description",
         nofollow: "nofollow meta tag pages",
         linksBufferFull: "skipped link collection due to buffer full",

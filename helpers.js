@@ -1,13 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
 
+// General steps: lower case -> tokenize -> stem
+const segmenter = new Intl.Segmenter(undefined, { granularity: "word" });
+/** Split text into words with proper multilingual support */
+export function tokenize(text) {
+    if (!text) return [];
+    return Array.from(segmenter.segment(text)).filter(segment => segment.isWordLike).map(segment => segment.segment);
+}
+
 /** Recursive function, return total score up until this point, each text node scored once based on max-scoring parent tag score */
 export function scoreNode(node, parentTagScores) {
     let wordScoreMap = {};
 
     for (const childNode of node.childNodes) {
         if (childNode.nodeType === 3) {
-            let words = childNode.textContent.toLowerCase().split(" ");
+            let words = tokenize(childNode.textContent.toLowerCase());
             const elementScore = Math.max(...parentTagScores);
             if (elementScore > 0) {
                 for (const word of words) {
