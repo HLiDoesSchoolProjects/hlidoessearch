@@ -15,6 +15,7 @@ const errorsCount = {
     robots: 0,
     fetch: 0,
     http: 0,
+    contentType: 0,
     parseDocument: 0,
     noindex: 0,
     noDescription: 0,
@@ -93,12 +94,20 @@ async function crawlOnce() {
         errorsCount.http++;
         return;
     }
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("text/html")) {
+        console.log(`Skipped: ${link} (Not HTML)`);
+        errorsCount.contentType++;
+        return;
+    }
 
     // Analyze & store content scoring
+    let jsdom;
     let document;
     try {
         const responseText = await response.text();
-        document = (new JSDOM(responseText, { url: link, virtualConsole })).window.document;
+        jsdom = new JSDOM(responseText, { url: link, virtualConsole });
+        document = jsdom.window.document;
     } catch (error) {
         console.error(`Document Parse Error: ${error}`);
         errorsCount.parseDocument++;
@@ -114,10 +123,10 @@ async function crawlOnce() {
         const keywordsMeta = document.querySelector("meta[name='keywords']");
         const keywordWords = keywordsMeta ? keywordsMeta.content.toLowerCase().split(",") : [];
         
-        let description = descriptionMeta ? descriptionMeta.content : "";
+        let description = descriptionMeta ? descriptionMeta.content.slice(0, 1000) : "";
         if (!description) {
             const firstP = document.querySelector("p");
-            description = firstP ? firstP.innerHTML : "";
+            description = firstP ? firstP.innerText?.slice(0, 1000) : "";
             errorsCount.noDescription++;
         }
 
@@ -179,6 +188,8 @@ async function crawlOnce() {
             }
         }
     }
+
+    if (jsdom) jsdom.window.close();
 }
 
 /** Start crawling until reached limit or ran out of links, write data to file */
@@ -248,6 +259,7 @@ async function startCrawl(userLinks, count) {
         robots: "disallowed by robots",
         fetch: "fetch errors",
         http: "non-2xx http responses",
+        contentType: "non-HTML documents",
         parseDocument: "document parse errors",
         noindex: "noindex meta tag pages",
         noDescription: "pages without description",

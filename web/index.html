@@ -307,7 +307,6 @@
             const query = searchBoxInput.value.trim();
             searchBoxInput.value = query;
             const lowerCaseQuery = query.toLowerCase();
-            const startTime = performance.now();
 
             // Page styling
             if (query) {
@@ -333,30 +332,31 @@
             }
 
             // Fetching
-            let searchResults;
+            let responseData;
             try {
                 const searchResponse = await fetch("api/search?" + new URLSearchParams({
                     q: query,
-                    count: 1000,
+                    count: 50,
                     mode: getCurrentMode()
                 }).toString());
-                searchResults = await searchResponse.json();
+                responseData = await searchResponse.json();
             } catch (error) {
                 resultsInfo.innerHTML = "Could not complete the search due to error";
                 return;
             }
 
             // Displaying
-            resultsInfo.innerHTML = `Got ${searchResults.length} ${searchResults.length === 1 ? "result" : "results"} in ${((performance.now() - startTime) / 1000).toFixed(1)} seconds`;
+            resultsInfo.innerHTML = `Got ${responseData.resultsCount} ${responseData.resultsCount === 1 ? "result" : "results"} in ${(responseData.timeTookMs / 1000).toFixed(1)} seconds`;
+            const isRelevanceDecimalNumber = getCurrentMode() === "bm25";
             let resultNum = 0;
             let resultDelay = 0;
-            for (const searchResult of searchResults) {
+            for (const searchResult of responseData.results) {
                 const resultFragment = resultTemplate.content.cloneNode(true);
                 resultFragment.querySelector(".domain").innerHTML = new URL(searchResult.link).hostname;
                 resultFragment.querySelector(".link").innerHTML = searchResult.title;
                 resultFragment.querySelector(".link").href = searchResult.link;
                 resultFragment.querySelector(".description").innerHTML = htmlEscape(searchResult.description);
-                resultFragment.querySelector(".metadata").innerHTML = `Relevance: ${searchResult.score} / Fetch Date: ${new Date(searchResult.date).toDateString()}`;
+                resultFragment.querySelector(".metadata").innerHTML = `Relevance: ${isRelevanceDecimalNumber ? searchResult.score.toFixed(4) : searchResult.score} | Fetch Date: ${new Date(searchResult.date).toDateString()}`;
                 resultFragment.children[0].style.animationDelay = `${resultDelay}ms`;
                 resultDelay += Math.max(0, 40 - resultNum++);
                 resultsContainer.appendChild(resultFragment);
